@@ -2,4 +2,4 @@
 from .unet import UNetModel, SuperResUNetModel
 
 
-__all__ = ['UNetModel', 'SuperResUNetModel']
+__all__ = ["UNetModel", "SuperResUNetModel"]

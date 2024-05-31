@@ -15,7 +15,9 @@ def mean_flat(tensor):
 
 
 def gelu(x):
-    return 0.5 * x * (1.0 + torch.tanh(0.7978845608028654 * x * (1.0 + 0.044715 * x * x)))
+    return (
+        0.5 * x * (1.0 + torch.tanh(0.7978845608028654 * x * (1.0 + 0.044715 * x * x)))
+    )
 
 
 @torch.jit.script
@@ -30,21 +32,23 @@ class GELUJit(torch.nn.Module):
 
 
 def get_activation(activation):
-    if activation == 'silu':
+    if activation == "silu":
         return torch.nn.SiLU()
-    elif activation == 'gelu_jit':
+    elif activation == "gelu_jit":
         return GELUJit()
-    elif activation == 'gelu':
+    elif activation == "gelu":
         return torch.nn.GELU()
-    elif activation == 'none':
+    elif activation == "none":
         return torch.nn.Identity()
     else:
-        raise ValueError(f'unknown activation type {activation}')
+        raise ValueError(f"unknown activation type {activation}")
 
 
 class GroupNorm32(nn.GroupNorm):
     def __init__(self, num_groups, num_channels, eps=1e-5, dtype=None):
-        super().__init__(num_groups=num_groups, num_channels=num_channels, eps=eps, dtype=dtype)
+        super().__init__(
+            num_groups=num_groups, num_channels=num_channels, eps=eps, dtype=dtype
+        )
 
     def forward(self, x):
         y = super().forward(x).to(x.dtype)
@@ -52,11 +56,12 @@ class GroupNorm32(nn.GroupNorm):
 
 
 class AttentionPooling(nn.Module):
-
     def __init__(self, num_heads, embed_dim, dtype=None):
         super().__init__()
         self.dtype = dtype
-        self.positional_embedding = nn.Parameter(torch.randn(1, embed_dim) / embed_dim ** 0.5)
+        self.positional_embedding = nn.Parameter(
+            torch.randn(1, embed_dim) / embed_dim**0.5
+        )
         self.k_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
         self.q_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
         self.v_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
@@ -72,12 +77,14 @@ class AttentionPooling(nn.Module):
             # (bs, length, n_heads, dim_per_head) --> (bs, n_heads, length, dim_per_head)
             x = x.transpose(1, 2)
             # (bs, n_heads, length, dim_per_head) --> (bs*n_heads, length, dim_per_head)
-            x = x.reshape(bs*self.num_heads, -1, self.dim_per_head)
+            x = x.reshape(bs * self.num_heads, -1, self.dim_per_head)
             # (bs*n_heads, length, dim_per_head) --> (bs*n_heads, dim_per_head, length)
             x = x.transpose(1, 2)
             return x
 
-        class_token = x.mean(dim=1, keepdim=True) + self.positional_embedding.to(x.dtype)
+        class_token = x.mean(dim=1, keepdim=True) + self.positional_embedding.to(
+            x.dtype
+        )
         x = torch.cat([class_token, x], dim=1)  # (bs, length+1, width)
 
         # (bs*n_heads, class_token_length, dim_per_head)
@@ -89,12 +96,12 @@ class AttentionPooling(nn.Module):
         # (bs*n_heads, class_token_length, length+class_token_length):
         scale = 1 / math.sqrt(math.sqrt(self.dim_per_head))
         weight = torch.einsum(
-            'bct,bcs->bts', q * scale, k * scale
+            "bct,bcs->bts", q * scale, k * scale
         )  # More stable with f16 than dividing afterwards
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
 
         # (bs*n_heads, dim_per_head, class_token_length)
-        a = torch.einsum('bts,bcs->bct', weight, v)
+        a = torch.einsum("bts,bcs->bct", weight, v)
 
         # (bs, length+1, width)
         a = a.reshape(bs, -1, 1).transpose(1, 2)
@@ -112,7 +119,7 @@ def conv_nd(dims, *args, **kwargs):
         return nn.Conv2d(*args, **kwargs)
     elif dims == 3:
         return nn.Conv3d(*args, **kwargs)
-    raise ValueError(f'unsupported dimensions: {dims}')
+    raise ValueError(f"unsupported dimensions: {dims}")
 
 
 def linear(*args, **kwargs):
@@ -132,7 +139,7 @@ def avg_pool_nd(dims, *args, **kwargs):
         return nn.AvgPool2d(*args, **kwargs)
     elif dims == 3:
         return nn.AvgPool3d(*args, **kwargs)
-    raise ValueError(f'unsupported dimensions: {dims}')
+    raise ValueError(f"unsupported dimensions: {dims}")
 
 
 def zero_module(module):
@@ -175,7 +182,9 @@ def timestep_embedding(timesteps, dim, max_period=10000, dtype=None):
         dtype = torch.float32
     half = dim // 2
     freqs = torch.exp(
-        -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
+        -math.log(max_period)
+        * torch.arange(start=0, end=half, dtype=torch.float32)
+        / half
     ).to(device=timesteps.device, dtype=dtype)
     args = timesteps[:, None].type(dtype) * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)

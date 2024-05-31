@@ -49,7 +49,6 @@ class UniformSampler(ScheduleSampler):
 
 
 class StaticSampler(ABC):
-
     def sample(self, batch_size, device, static_step=100):
         indices_np = np.ones(batch_size, dtype=np.int) * static_step
         weights_np = np.ones(batch_size, dtype=np.int)

@@ -10,12 +10,12 @@ def create_gaussian_diffusion(
     steps=1000,
     learn_sigma=False,
     sigma_small=False,
-    noise_schedule='linear',
+    noise_schedule="linear",
     use_kl=False,
     predict_xstart=False,
     rescale_timesteps=False,
     rescale_learned_sigmas=False,
-    timestep_respacing='',
+    timestep_respacing="",
 ):
     betas = gd.get_named_beta_schedule(noise_schedule, steps)
     if use_kl:
@@ -66,21 +66,21 @@ def space_timesteps(num_timesteps, section_counts):
     :return: a set of diffusion steps from the original process to use.
     """
     if isinstance(section_counts, str):
-        if section_counts.startswith('ddim'):
-            desired_count = int(section_counts[len('ddim'):])
+        if section_counts.startswith("ddim"):
+            desired_count = int(section_counts[len("ddim") :])
             for i in range(1, num_timesteps):
                 if len(range(0, num_timesteps, i)) == desired_count:
                     return set(range(0, num_timesteps, i))
             raise ValueError(
-                f'cannot create exactly {num_timesteps} steps with an integer stride'
+                f"cannot create exactly {num_timesteps} steps with an integer stride"
             )
-        elif section_counts == 'fast27':
-            steps = space_timesteps(num_timesteps, '10,10,3,2,2')
+        elif section_counts == "fast27":
+            steps = space_timesteps(num_timesteps, "10,10,3,2,2")
             # Help reduce DDIM artifacts from noisiest timesteps.
             steps.remove(num_timesteps - 1)
             steps.add(num_timesteps - 3)
             return steps
-        section_counts = [int(x) for x in section_counts.split(',')]
+        section_counts = [int(x) for x in section_counts.split(",")]
     size_per = num_timesteps // len(section_counts)
     extra = num_timesteps % len(section_counts)
     start_idx = 0
@@ -89,7 +89,7 @@ def space_timesteps(num_timesteps, section_counts):
         size = size_per + (1 if i < extra else 0)
         if size < section_count:
             raise ValueError(
-                f'cannot divide section of {size} steps into {section_count}'
+                f"cannot divide section of {size} steps into {section_count}"
             )
         if section_count <= 1:
             frac_stride = 1
@@ -117,7 +117,7 @@ class SpacedDiffusion(gd.GaussianDiffusion):
     def __init__(self, use_timesteps, **kwargs):
         self.use_timesteps = set(use_timesteps)
         self.timestep_map = []
-        self.original_num_steps = len(kwargs['betas'])
+        self.original_num_steps = len(kwargs["betas"])
 
         base_diffusion = gd.GaussianDiffusion(**kwargs)  # pylint: disable=missing-kwoa
         last_alpha_cumprod = 1.0
@@ -127,7 +127,7 @@ class SpacedDiffusion(gd.GaussianDiffusion):
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
                 last_alpha_cumprod = alpha_cumprod
                 self.timestep_map.append(i)
-        kwargs['betas'] = np.array(new_betas)
+        kwargs["betas"] = np.array(new_betas)
         super().__init__(**kwargs)
 
     def p_mean_variance(

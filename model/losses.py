@@ -20,7 +20,7 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
         if isinstance(obj, torch.Tensor):
             tensor = obj
             break
-    assert tensor is not None, 'at least one argument must be a Tensor'
+    assert tensor is not None, "at least one argument must be a Tensor"
 
     # Force variances to be Tensors. Broadcasting helps convert scalars to
     # Tensors, but it does not work for th.exp().
@@ -43,7 +43,9 @@ def approx_standard_normal_cdf(x):
     A fast approximation of the cumulative distribution function of the
     standard normal.
     """
-    return 0.5 * (1.0 + torch.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * torch.pow(x, 3))))
+    return 0.5 * (
+        1.0 + torch.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * torch.pow(x, 3)))
+    )
 
 
 def discretized_gaussian_log_likelihood(x, *, means, log_scales):
@@ -69,7 +71,9 @@ def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     log_probs = torch.where(
         x < -0.999,
         log_cdf_plus,
-        torch.where(x > 0.999, log_one_minus_cdf_min, torch.log(cdf_delta.clamp(min=1e-12))),
+        torch.where(
+            x > 0.999, log_one_minus_cdf_min, torch.log(cdf_delta.clamp(min=1e-12))
+        ),
     )
     assert log_probs.shape == x.shape
     return log_probs

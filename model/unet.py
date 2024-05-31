@@ -8,11 +8,19 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .nn import avg_pool_nd, conv_nd, linear, normalization, timestep_embedding, zero_module, get_activation, \
-    AttentionPooling
+from .nn import (
+    avg_pool_nd,
+    conv_nd,
+    linear,
+    normalization,
+    timestep_embedding,
+    zero_module,
+    get_activation,
+    AttentionPooling,
+)
 
-_FORCE_MEM_EFFICIENT_ATTN = int(os.environ.get('FORCE_MEM_EFFICIENT_ATTN', 0))
-print('FORCE_MEM_EFFICIENT_ATTN=', _FORCE_MEM_EFFICIENT_ATTN, '@UNET:QKVATTENTION')
+_FORCE_MEM_EFFICIENT_ATTN = int(os.environ.get("FORCE_MEM_EFFICIENT_ATTN", 0))
+print("FORCE_MEM_EFFICIENT_ATTN=", _FORCE_MEM_EFFICIENT_ATTN, "@UNET:QKVATTENTION")
 if _FORCE_MEM_EFFICIENT_ATTN:
     from xformers.ops import memory_efficient_attention  # noqa
 
@@ -63,20 +71,24 @@ class Upsample(nn.Module):
         self.dims = dims
         self.dtype = dtype
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1, dtype=self.dtype)
+            self.conv = conv_nd(
+                dims, self.channels, self.out_channels, 3, padding=1, dtype=self.dtype
+            )
 
     def forward(self, x):
         assert x.shape[1] == self.channels
         if self.dims == 3:
             if self.dtype == torch.bfloat16:
-                x = x.type(torch.float32 if x.device.type == 'cpu' else torch.float16)
-            x = F.interpolate(x, (x.shape[2] * 2, x.shape[3] * 2, x.shape[4] * 2), mode='nearest')
+                x = x.type(torch.float32 if x.device.type == "cpu" else torch.float16)
+            x = F.interpolate(
+                x, (x.shape[2] * 2, x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
+            )
             if self.dtype == torch.bfloat16:
                 x = x.type(torch.bfloat16)
         else:
             if self.dtype == torch.bfloat16:
-                x = x.type(torch.float32 if x.device.type == 'cpu' else torch.float16)
-            x = F.interpolate(x, scale_factor=2, mode='nearest')
+                x = x.type(torch.float32 if x.device.type == "cpu" else torch.float16)
+            x = F.interpolate(x, scale_factor=2, mode="nearest")
             if self.dtype == torch.bfloat16:
                 x = x.type(torch.bfloat16)
         if self.use_conv:
@@ -100,9 +112,17 @@ class Downsample(nn.Module):
         self.use_conv = use_conv
         self.dims = dims
         self.dtype = dtype
-        stride = 2 if dims != 3 else (2, 2, 2) # Modified for 3D volume input.
+        stride = 2 if dims != 3 else (2, 2, 2)  # Modified for 3D volume input.
         if use_conv:
-            self.op = conv_nd(dims, self.channels, self.out_channels, 3, stride=stride, padding=1, dtype=self.dtype)
+            self.op = conv_nd(
+                dims,
+                self.channels,
+                self.out_channels,
+                3,
+                stride=stride,
+                padding=1,
+                dtype=self.dtype,
+            )
         else:
             assert self.channels == self.out_channels
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
@@ -128,20 +148,20 @@ class ResBlock(TimestepBlock):
     """
 
     def __init__(
-            self,
-            channels,
-            emb_channels,
-            dropout,
-            activation,
-            out_channels=None,
-            use_conv=False,
-            use_scale_shift_norm=False,
-            dims=2,
-            up=False,
-            down=False,
-            dtype=None,
-            efficient_activation=False,
-            scale_skip_connection=False,
+        self,
+        channels,
+        emb_channels,
+        dropout,
+        activation,
+        out_channels=None,
+        use_conv=False,
+        use_scale_shift_norm=False,
+        dims=2,
+        up=False,
+        down=False,
+        dtype=None,
+        efficient_activation=False,
+        scale_skip_connection=False,
     ):
         super().__init__()
         self.dtype = dtype
@@ -176,22 +196,35 @@ class ResBlock(TimestepBlock):
             linear(
                 emb_channels,
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
-                dtype=self.dtype
+                dtype=self.dtype,
             ),
         )
         self.out_layers = nn.Sequential(
             normalization(self.out_channels, dtype=self.dtype),
             get_activation(activation),
             nn.Dropout(p=dropout),
-            zero_module(conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, dtype=self.dtype)),
+            zero_module(
+                conv_nd(
+                    dims,
+                    self.out_channels,
+                    self.out_channels,
+                    3,
+                    padding=1,
+                    dtype=self.dtype,
+                )
+            ),
         )
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 3, padding=1, dtype=self.dtype)
+            self.skip_connection = conv_nd(
+                dims, channels, self.out_channels, 3, padding=1, dtype=self.dtype
+            )
         else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, dtype=self.dtype)
+            self.skip_connection = conv_nd(
+                dims, channels, self.out_channels, 1, dtype=self.dtype
+            )
 
     def forward(self, x, emb):
         """
@@ -234,13 +267,13 @@ class AttentionBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            channels,
-            num_heads=1,
-            num_head_channels=-1,
-            disable_self_attention=False,
-            encoder_channels=None,
-            dtype=None,
+        self,
+        channels,
+        num_heads=1,
+        num_head_channels=-1,
+        disable_self_attention=False,
+        encoder_channels=None,
+        dtype=None,
     ):
         super().__init__()
         self.dtype = dtype
@@ -251,7 +284,7 @@ class AttentionBlock(nn.Module):
         else:
             assert (
                 channels % num_head_channels == 0
-            ), f'q,k,v channels {channels} is not divisible by num_head_channels {num_head_channels}'
+            ), f"q,k,v channels {channels} is not divisible by num_head_channels {num_head_channels}"
             self.num_heads = channels // num_head_channels
         self.norm = normalization(channels, dtype=self.dtype)
         self.qkv = conv_nd(1, channels, channels * 3, 1, dtype=self.dtype)
@@ -259,10 +292,14 @@ class AttentionBlock(nn.Module):
             self.qkv = conv_nd(1, channels, channels, 1, dtype=self.dtype)
         else:
             self.qkv = conv_nd(1, channels, channels * 3, 1, dtype=self.dtype)
-        self.attention = QKVAttention(self.num_heads, disable_self_attention=disable_self_attention)
+        self.attention = QKVAttention(
+            self.num_heads, disable_self_attention=disable_self_attention
+        )
 
         if encoder_channels is not None:
-            self.encoder_kv = conv_nd(1, encoder_channels, channels * 2, 1, dtype=self.dtype)
+            self.encoder_kv = conv_nd(
+                1, encoder_channels, channels * 2, 1, dtype=self.dtype
+            )
             self.norm_encoder = normalization(encoder_channels, dtype=self.dtype)
         self.proj_out = zero_module(conv_nd(1, channels, channels, 1, dtype=self.dtype))
 
@@ -300,7 +337,7 @@ class QKVAttention(nn.Module):
         bs, width, length = qkv.shape
         if self.disable_self_attention:
             ch = width // (1 * self.n_heads)
-            q, = qkv.reshape(bs * self.n_heads, ch * 1, length).split(ch, dim=1)
+            (q,) = qkv.reshape(bs * self.n_heads, ch * 1, length).split(ch, dim=1)
         else:
             assert width % (3 * self.n_heads) == 0
             ch = width // (3 * self.n_heads)
@@ -308,9 +345,13 @@ class QKVAttention(nn.Module):
         if encoder_kv is not None:
             assert encoder_kv.shape[1] == self.n_heads * ch * 2
             if self.disable_self_attention:
-                k, v = encoder_kv.reshape(bs * self.n_heads, ch * 2, -1).split(ch, dim=1)
+                k, v = encoder_kv.reshape(bs * self.n_heads, ch * 2, -1).split(
+                    ch, dim=1
+                )
             else:
-                ek, ev = encoder_kv.reshape(bs * self.n_heads, ch * 2, -1).split(ch, dim=1)
+                ek, ev = encoder_kv.reshape(bs * self.n_heads, ch * 2, -1).split(
+                    ch, dim=1
+                )
                 k = torch.cat([ek, k], dim=-1)
                 v = torch.cat([ev, v], dim=-1)
         scale = 1 / math.sqrt(math.sqrt(ch))
@@ -320,10 +361,10 @@ class QKVAttention(nn.Module):
             a = a.permute(0, 2, 1)
         else:
             weight = torch.einsum(
-                'bct,bcs->bts', q * scale, k * scale
+                "bct,bcs->bts", q * scale, k * scale
             )  # More stable with f16 than dividing afterwards
             weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-            a = torch.einsum('bts,bcs->bct', weight, v)
+            a = torch.einsum("bts,bcs->bct", weight, v)
         return a.reshape(bs, -1, length)
 
 
@@ -355,32 +396,32 @@ class UNetModel(nn.Module):
     """
 
     def __init__(
-            self,
-            in_channels,
-            model_channels,
-            out_channels,
-            num_res_blocks,
-            attention_resolutions,
-            activation,
-            encoder_dim,
-            att_pool_heads,
-            encoder_channels,
-            image_size,
-            disable_self_attentions=None,
-            dropout=0,
-            channel_mult=(1, 2, 4, 8),
-            conv_resample=True,
-            dims=2,
-            num_classes=None,
-            precision='32',
-            num_heads=1,
-            num_head_channels=-1,
-            num_heads_upsample=-1,
-            use_scale_shift_norm=False,
-            resblock_updown=False,
-            efficient_activation=False,
-            scale_skip_connection=False,
-            unconditional_gen=False,
+        self,
+        in_channels,
+        model_channels,
+        out_channels,
+        num_res_blocks,
+        attention_resolutions,
+        activation,
+        encoder_dim,
+        att_pool_heads,
+        encoder_channels,
+        image_size,
+        disable_self_attentions=None,
+        dropout=0,
+        channel_mult=(1, 2, 4, 8),
+        conv_resample=True,
+        dims=2,
+        num_classes=None,
+        precision="32",
+        num_heads=1,
+        num_head_channels=-1,
+        num_heads_upsample=-1,
+        use_scale_shift_norm=False,
+        resblock_updown=False,
+        efficient_activation=False,
+        scale_skip_connection=False,
+        unconditional_gen=False,
     ):
         super().__init__()
 
@@ -400,7 +441,7 @@ class UNetModel(nn.Module):
         # adapt attention resolutions
         if isinstance(attention_resolutions, str):
             self.attention_resolutions = []
-            for res in attention_resolutions.split(','):
+            for res in attention_resolutions.split(","):
                 self.attention_resolutions.append(image_size // int(res))
         else:
             self.attention_resolutions = attention_resolutions
@@ -414,7 +455,7 @@ class UNetModel(nn.Module):
             self.disable_self_attentions = attention_resolutions
         elif isinstance(disable_self_attentions, str):
             self.disable_self_attentions = []
-            for res in disable_self_attentions.split(','):
+            for res in disable_self_attentions.split(","):
                 self.disable_self_attentions.append(image_size // int(res))
         else:
             self.disable_self_attentions = disable_self_attentions
@@ -423,7 +464,9 @@ class UNetModel(nn.Module):
 
         # adapt channel mult
         if isinstance(channel_mult, str):
-            self.channel_mult = tuple(int(ch_mult) for ch_mult in channel_mult.split(','))
+            self.channel_mult = tuple(
+                int(ch_mult) for ch_mult in channel_mult.split(",")
+            )
         else:
             self.channel_mult = tuple(channel_mult)
         #
@@ -433,10 +476,10 @@ class UNetModel(nn.Module):
         self.dtype = torch.float32
 
         self.precision = str(precision)
-        self.use_fp16 = precision == '16'
-        if self.precision == '16':
+        self.use_fp16 = precision == "16"
+        if self.precision == "16":
             self.dtype = torch.float16
-        elif self.precision == 'bf16':
+        elif self.precision == "bf16":
             self.dtype = torch.bfloat16
 
         self.num_heads = num_heads
@@ -451,18 +494,22 @@ class UNetModel(nn.Module):
         )
 
         if self.num_classes is not None:
-            self.label_emb = nn.Embedding(num_classes+1, self.time_embed_dim)
+            self.label_emb = nn.Embedding(num_classes + 1, self.time_embed_dim)
 
         ch = input_ch = int(self.channel_mult[0] * model_channels)
         self.input_blocks = nn.ModuleList(
-            [TimestepEmbedSequential(conv_nd(dims, in_channels, ch, 3, padding=1, dtype=self.dtype))]
+            [
+                TimestepEmbedSequential(
+                    conv_nd(dims, in_channels, ch, 3, padding=1, dtype=self.dtype)
+                )
+            ]
         )
         self._feature_size = ch
         input_block_chans = [ch]
         ds = 1
 
         if isinstance(num_res_blocks, int):
-            num_res_blocks = [num_res_blocks]*len(self.channel_mult)
+            num_res_blocks = [num_res_blocks] * len(self.channel_mult)
         self.num_res_blocks = num_res_blocks
 
         for level, mult in enumerate(self.channel_mult):
@@ -514,7 +561,9 @@ class UNetModel(nn.Module):
                             scale_skip_connection=self.scale_skip_connection,
                         )
                         if resblock_updown
-                        else Downsample(ch, conv_resample, dims=dims, out_channels=out_ch)
+                        else Downsample(
+                            ch, conv_resample, dims=dims, out_channels=out_ch
+                        )
                     )
                 )
                 ch = out_ch
@@ -612,29 +661,46 @@ class UNetModel(nn.Module):
         self.out = nn.Sequential(
             normalization(ch, dtype=self.dtype),
             get_activation(activation),
-            zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1, dtype=self.dtype)),
+            zero_module(
+                conv_nd(dims, input_ch, out_channels, 3, padding=1, dtype=self.dtype)
+            ),
         )
 
-        self.activation_layer = get_activation(activation) if self.efficient_activation else nn.Identity()
+        self.activation_layer = (
+            get_activation(activation) if self.efficient_activation else nn.Identity()
+        )
 
         if not self.unconditional_gen and num_classes is None:
             self.encoder_pooling = nn.Sequential(
                 nn.LayerNorm(encoder_dim, dtype=self.dtype),
                 AttentionPooling(att_pool_heads, encoder_dim, dtype=self.dtype),
                 nn.Linear(encoder_dim, self.time_embed_dim, dtype=self.dtype),
-                nn.LayerNorm(self.time_embed_dim, dtype=self.dtype)
+                nn.LayerNorm(self.time_embed_dim, dtype=self.dtype),
             )
             if encoder_dim != encoder_channels:
-                self.encoder_proj = nn.Linear(encoder_dim, encoder_channels, dtype=self.dtype)
+                self.encoder_proj = nn.Linear(
+                    encoder_dim, encoder_channels, dtype=self.dtype
+                )
             else:
                 self.encoder_proj = nn.Identity()
 
         self.cache = None
 
-    def forward(self, x, timesteps, cond_text=None, class_labels=None, aug_emb=None, use_cache=False, **kwargs):
+    def forward(
+        self,
+        x,
+        timesteps,
+        cond_text=None,
+        class_labels=None,
+        aug_emb=None,
+        use_cache=False,
+        **kwargs,
+    ):
         hs = []
         input_type = x.dtype
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels, dtype=self.dtype))
+        emb = self.time_embed(
+            timestep_embedding(timesteps, self.model_channels, dtype=self.dtype)
+        )
 
         encoder_out = None
         if cond_text is not None:
@@ -668,14 +734,14 @@ class SuperResUNetModel(UNetModel):
     Expects an extra kwarg `low_res` to condition on a low-resolution image.
     """
 
-    def __init__(self, low_res_diffusion, interpolate_mode='bilinear', *args, **kwargs):
+    def __init__(self, low_res_diffusion, interpolate_mode="bilinear", *args, **kwargs):
         self.low_res_diffusion = low_res_diffusion
         self.interpolate_mode = interpolate_mode
         super().__init__(*args, **kwargs)
 
         self.aug_proj = nn.Sequential(
             linear(self.model_channels, self.time_embed_dim, dtype=self.dtype),
-            get_activation(kwargs['activation']),
+            get_activation(kwargs["activation"]),
             linear(self.time_embed_dim, self.time_embed_dim, dtype=self.dtype),
         )
 
@@ -683,18 +749,25 @@ class SuperResUNetModel(UNetModel):
         bs, _, new_height, new_width = x.shape
 
         align_corners = True
-        if self.interpolate_mode == 'nearest':
+        if self.interpolate_mode == "nearest":
             align_corners = None
 
         upsampled = F.interpolate(
-            low_res, (new_height, new_width), mode=self.interpolate_mode, align_corners=align_corners
+            low_res,
+            (new_height, new_width),
+            mode=self.interpolate_mode,
+            align_corners=align_corners,
         )
 
         if aug_level is None:
-            aug_steps = (np.random.random(bs)*1000).astype(np.int64)  # uniform [0, 1)
+            aug_steps = (np.random.random(bs) * 1000).astype(np.int64)  # uniform [0, 1)
             aug_steps = torch.from_numpy(aug_steps).to(x.device, dtype=torch.long)
         else:
-            aug_steps = torch.tensor([int(aug_level * 1000)]).repeat(bs).to(x.device, dtype=torch.long)
+            aug_steps = (
+                torch.tensor([int(aug_level * 1000)])
+                .repeat(bs)
+                .to(x.device, dtype=torch.long)
+            )
 
         upsampled = self.low_res_diffusion.q_sample(upsampled, aug_steps)
         x = torch.cat([x, upsampled], dim=1)
